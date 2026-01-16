@@ -82,13 +82,8 @@ dmypy.json
 .pyre/
 
 # Project-specific
-data/coco/                  # Large COCO dataset - download separately
-data/train/cover/           # Training cover images (add your own)
-data/train/secret/          # Training secret images (add your own)
-data/train_diff/            # Alternative training dataset
-
-outputs/checkpoints/        # Trained model checkpoints (optional to share)
-outputs/tensorboard/        # TensorBoard logs (optional to share)
+data/
+outputs/
 
 # System files
 .DS_Store
