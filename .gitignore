@@ -83,7 +83,7 @@ dmypy.json
 
 # Project-specific
 data/
-outputs/
+frontend/node_modules/
 
 # System files
 .DS_Store
