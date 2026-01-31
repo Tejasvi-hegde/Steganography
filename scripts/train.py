@@ -80,10 +80,13 @@ class StegoTrainer:
         }
     
     def calculate_psnr(self, original, reconstructed):
-        mse = torch.mean((original - reconstructed) ** 2)
+        # Denormalize from [-1,1] to [0,1] for proper PSNR calculation
+        orig = (original + 1) / 2
+        recon = (reconstructed + 1) / 2
+        mse = torch.mean((orig - recon) ** 2)
         if mse == 0:
             return float('inf')
-        return 20 * torch.log10(2.0 / torch.sqrt(mse)).item()
+        return 10 * torch.log10(1.0 / mse).item()
 
 def main():
     # Configuration

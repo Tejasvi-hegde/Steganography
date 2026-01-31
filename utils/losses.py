@@ -68,22 +68,24 @@ class SSIMLoss(nn.Module):
 
 
 class StegoLoss(nn.Module):
-    def __init__(self, alpha=1.0, beta=0.7, gamma=0.01, use_perceptual=True, use_ssim=True, device='cpu'):
+    def __init__(self, alpha=1.0, beta=0.7, gamma=0.01, use_perceptual=True, use_ssim=True, device=None):
         super(StegoLoss, self).__init__()
         self.alpha = alpha      # Reconstruction weight
         self.beta = beta        # Stego quality weight
         self.gamma = gamma      # Adversarial weight
         self.use_perceptual = use_perceptual
         self.use_ssim = use_ssim
+        
+        # Auto-detect device if not provided
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.device = device
         
         self.mse_loss = nn.MSELoss()
         self.l1_loss = nn.L1Loss()
         
         if use_perceptual:
-            self.perceptual = PerceptualLoss()
-            if device != 'cpu':
-                self.perceptual = self.perceptual.to(device)
+            self.perceptual = PerceptualLoss().to(device)
             
         if use_ssim:
             self.ssim = SSIMLoss()

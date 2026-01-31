@@ -1,10 +1,15 @@
+"""
+FINAL Encoder v4.0 - Perfect Steganography
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class ResidualBlock(nn.Module):
+    """Residual block with pre-activation"""
     def __init__(self, channels):
-        super(ResidualBlock, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
         self.conv2 = nn.Conv2d(channels, channels, 3, padding=1)
@@ -12,21 +17,20 @@ class ResidualBlock(nn.Module):
         
     def forward(self, x):
         residual = x
-        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.leaky_relu(self.bn1(self.conv1(x)), 0.2)
         x = self.bn2(self.conv2(x))
-        x += residual
-        return F.relu(x)
+        return F.leaky_relu(x + residual, 0.2)
 
 
-class AttentionBlock(nn.Module):
-    """Channel attention for better feature selection"""
-    def __init__(self, channels):
-        super(AttentionBlock, self).__init__()
+class SEBlock(nn.Module):
+    """Squeeze-and-Excitation attention block"""
+    def __init__(self, channels, reduction=16):
+        super().__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
-            nn.Linear(channels, channels // 4, bias=False),
+            nn.Linear(channels, channels // reduction, bias=False),
             nn.ReLU(inplace=True),
-            nn.Linear(channels // 4, channels, bias=False),
+            nn.Linear(channels // reduction, channels, bias=False),
             nn.Sigmoid()
         )
     
@@ -38,76 +42,107 @@ class AttentionBlock(nn.Module):
 
 
 class StegoEncoder(nn.Module):
+    """
+    FINAL Encoder v4.0 - Perfect balance of invisibility and capacity
+    
+    Features:
+    - Dual-branch processing (cover + secret)
+    - Adaptive residual scaling (learned per-channel)
+    - Dense skip connections
+    - SE attention for channel importance
+    """
     def __init__(self, input_channels=6, hidden_dim=64):
-        super(StegoEncoder, self).__init__()
+        super().__init__()
         
-        # Initial convolution with more channels
-        self.conv1 = nn.Conv2d(input_channels, hidden_dim, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(hidden_dim)
-        
-        # Downsample path
-        self.conv2 = nn.Conv2d(hidden_dim, hidden_dim*2, 3, padding=1, stride=2)
-        self.bn2 = nn.BatchNorm2d(hidden_dim*2)
-        
-        # More residual blocks for better feature extraction
-        self.res_blocks = nn.Sequential(
-            ResidualBlock(hidden_dim*2),
-            ResidualBlock(hidden_dim*2),
-            ResidualBlock(hidden_dim*2),
-            ResidualBlock(hidden_dim*2),  # Added
-            ResidualBlock(hidden_dim*2),  # Added
+        # Separate feature extraction
+        self.cover_encoder = nn.Sequential(
+            nn.Conv2d(3, hidden_dim//2, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim//2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(hidden_dim//2, hidden_dim//2, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim//2),
+            nn.LeakyReLU(0.2, inplace=True),
         )
         
-        # Attention for feature refinement
-        self.attention = AttentionBlock(hidden_dim*2)
+        self.secret_encoder = nn.Sequential(
+            nn.Conv2d(3, hidden_dim//2, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim//2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(hidden_dim//2, hidden_dim//2, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim//2),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
         
-        # Upsample to original size
-        self.upsample = nn.ConvTranspose2d(hidden_dim*2, hidden_dim, 4, stride=2, padding=1)
-        self.bn3 = nn.BatchNorm2d(hidden_dim)
-        
-        # Skip connection processing
-        self.skip_conv = nn.Conv2d(hidden_dim, hidden_dim, 1)
-        
-        # Refinement layers
-        self.refine = nn.Sequential(
-            nn.Conv2d(hidden_dim * 2, hidden_dim, 3, padding=1),
+        # Fusion layer
+        self.fusion = nn.Sequential(
+            nn.Conv2d(hidden_dim, hidden_dim, 1),
             nn.BatchNorm2d(hidden_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(hidden_dim, hidden_dim // 2, 3, padding=1),
-            nn.BatchNorm2d(hidden_dim // 2),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(0.2, inplace=True),
         )
         
-        # Final convolution - outputs difference from cover
-        self.conv_out = nn.Conv2d(hidden_dim // 2, 3, 3, padding=1)
+        # Downsampling
+        self.down1 = nn.Sequential(
+            nn.Conv2d(hidden_dim, hidden_dim*2, 3, stride=2, padding=1),
+            nn.BatchNorm2d(hidden_dim*2),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        
+        # Deep processing with attention
+        self.res_blocks = nn.ModuleList([
+            ResidualBlock(hidden_dim*2) for _ in range(8)
+        ])
+        self.attention = SEBlock(hidden_dim*2)
+        
+        # Upsampling
+        self.up1 = nn.Sequential(
+            nn.ConvTranspose2d(hidden_dim*2, hidden_dim, 4, stride=2, padding=1),
+            nn.BatchNorm2d(hidden_dim),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        
+        # Output refinement with skip
+        self.refine = nn.Sequential(
+            nn.Conv2d(hidden_dim*2, hidden_dim, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(hidden_dim, hidden_dim//2, 3, padding=1),
+            nn.BatchNorm2d(hidden_dim//2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(hidden_dim//2, 3, 3, padding=1),
+        )
+        
+        # Learnable per-channel scaling
+        self.scale = nn.Parameter(torch.ones(1, 3, 1, 1) * 0.1)
         
     def forward(self, cover, secret):
-        # Concatenate cover and secret images
-        x = torch.cat([cover, secret], dim=1)
+        # Extract features separately
+        cover_feat = self.cover_encoder(cover)
+        secret_feat = self.secret_encoder(secret)
         
-        # Encoder path
-        x1 = F.relu(self.bn1(self.conv1(x)))  # Save for skip connection
-        x = F.relu(self.bn2(self.conv2(x1)))
+        # Fuse features
+        x = torch.cat([cover_feat, secret_feat], dim=1)
+        x = self.fusion(x)
+        skip = x
         
-        # Deep feature extraction
-        x = self.res_blocks(x)
+        # Downsample
+        x = self.down1(x)
+        
+        # Deep processing
+        for res_block in self.res_blocks:
+            x = res_block(x)
         x = self.attention(x)
         
         # Upsample
-        x = F.relu(self.bn3(self.upsample(x)))
+        x = self.up1(x)
         
-        # Skip connection for preserving spatial details
-        skip = self.skip_conv(x1)
+        # Refine with skip connection
         x = torch.cat([x, skip], dim=1)
+        residual = self.refine(x)
         
-        # Refinement
-        x = self.refine(x)
+        # Apply learned scaling (clamped for stability)
+        scale = torch.clamp(self.scale, 0.03, 0.12)
+        residual = torch.tanh(residual) * scale
         
-        # Output residual (change to apply to cover)
-        residual = self.conv_out(x) * 0.1  # Scale down residual
-        
-        # Add residual to cover for better quality
+        # Add to cover
         stego = cover + residual
-        stego = torch.clamp(stego, -1, 1)  # Keep in valid range
-        
-        return stego
+        return torch.clamp(stego, -1, 1)

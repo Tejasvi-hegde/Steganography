@@ -15,7 +15,7 @@ The system uses residual blocks and convolutional networks to learn robust image
 ## Requirements
 
 - Python 3.8+
-- PyTorch with GPU support (torch-directml for Windows)
+- PyTorch 2.0+ (CPU or GPU)
 - See `requirements.txt` for dependencies
 
 ## Installation
@@ -29,68 +29,69 @@ cd steganography
 pip install -r requirements.txt
 ```
 
-### GPU Support (Windows)
+## Quick Start (CPU Training - Recommended for Laptops)
 
-```bash
-pip install torch-directml
-```
-
-## Quick Start
-
-### 1. Prepare Dataset
-
-Download COCO dataset:
+### 1. Download Dataset (Lightweight - ~50MB instead of 18GB COCO)
 
 ```bash
 cd scripts
-python download_coco.py
-python prepare_coco_for_training.py
+
+# EASIEST: Download random images from picsum.photos
+python download_dataset.py --dataset picsum --num_images 1000 --max_pairs 400
+
+# This downloads ~1000 images and creates 400 cover/secret pairs
+# Uses DIFFERENT images for cover and secret (important for training!)
 ```
 
-This organizes images into:
-
-```
-data/
-├── train/
-│   ├── cover/      (cover images)
-│   └── secret/     (secret images)
-└── train_diff/
-    ├── cover/
-    └── secret/
-```
-
-### 2. Train the Model
+### 2. Train the Model (CPU Optimized)
 
 ```bash
-cd scripts
-python train.py
+python simple_train.py
 ```
 
-Checkpoints are saved to `../outputs/checkpoints/`:
+Training settings (optimized for CPU):
+- **Batch size**: 2 (memory efficient)
+- **Epochs**: 20
+- **Image size**: 128×128
+- **Time**: ~30-60 minutes on modern CPU
 
-- `encoder_final.pth` - Trained encoder
-- `decoder_final.pth` - Trained decoder
-
-### 3. Hide a Secret Image
+### 3. Test the Model
 
 ```bash
-cd scripts
+python quick_test.py
+```
+
+This shows visual results with PSNR metrics.
+
+### 4. Hide a Secret Image
+
+```bash
 python hide.py \
-  --cover ../data/test/cover.jpg \
-  --secret ../data/test/secret.jpg \
+  --cover ../data/train/cover/image_00001.png \
+  --secret ../data/train/secret/image_00002.png \
   --output ../outputs/stego.png \
-  --encoder ../outputs/checkpoints/encoder_final.pth
+  --encoder ../outputs/checkpoints/encoder_final.pth \
+  --device cpu
 ```
 
-### 4. Extract the Secret Image
+### 5. Extract the Secret Image
 
 ```bash
-cd scripts
 python extract.py \
   --stego ../outputs/stego.png \
   --output ../outputs/recovered.png \
-  --decoder ../outputs/checkpoints/decoder_final.pth
+  --decoder ../outputs/checkpoints/decoder_final.pth \
+  --device cpu
 ```
+
+## Dataset Options
+
+| Dataset | Size | Quality | Command |
+|---------|------|---------|---------|
+| **Picsum** (Recommended) | ~50MB | Good | `--dataset picsum --num_images 1000` |
+| STL-10 | ~2.5GB | High | `--dataset stl10` |
+| Flowers102 | ~350MB | Good | `--dataset flowers` |
+| Custom | Varies | - | `--dataset custom --custom_dir /path/to/images` |
 
 ## Project Structure
 

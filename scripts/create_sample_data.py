@@ -1,5 +1,5 @@
 """
-Create a small sample dataset for training using generated images.
+Create a small sample dataset for t raining using generated images.
 No download required - creates colorful random images for testing.
 """
 import os
