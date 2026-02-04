@@ -39,7 +39,7 @@ _transform = None
 _torch = None
 _loaded = False
 
-IMG_SIZE = 128
+IMG_SIZE = 256  # Match training size for better quality
 
 
 def get_models():
@@ -58,8 +58,8 @@ def get_models():
     _device = torch.device('cpu')  # Use CPU for stability
     logger.info(f"Using device: {_device}")
     
-    _encoder = StegoEncoder(input_channels=6, hidden_dim=64).to(_device)
-    _decoder = StegoDecoder(input_channels=3, hidden_dim=64).to(_device)
+    _encoder = StegoEncoder().to(_device)
+    _decoder = StegoDecoder().to(_device)
     
     # Load weights
     checkpoint_dir = os.path.join(ROOT_DIR, 'outputs', 'checkpoints')
@@ -67,8 +67,8 @@ def get_models():
     decoder_path = os.path.join(checkpoint_dir, 'decoder_final.pth')
     
     if os.path.exists(encoder_path) and os.path.exists(decoder_path):
-        _encoder.load_state_dict(torch.load(encoder_path, map_location=_device, weights_only=True))
-        _decoder.load_state_dict(torch.load(decoder_path, map_location=_device, weights_only=True))
+        _encoder.load_state_dict(torch.load(encoder_path, map_location=_device))
+        _decoder.load_state_dict(torch.load(decoder_path, map_location=_device))
         logger.info("Weights loaded!")
     else:
         logger.warning("No weights found, using random weights")
@@ -87,11 +87,22 @@ def get_models():
 
 
 def tensor_to_base64(tensor, torch_module):
-    """Convert tensor to base64 PNG"""
+    """Convert tensor to base64 PNG - ensures RGB color output"""
+    # Denormalize from [-1, 1] to [0, 1]
     t = tensor * 0.5 + 0.5
     t = torch_module.clamp(t, 0, 1)
-    arr = (t.cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
-    img = Image.fromarray(arr)
+    
+    # Convert to numpy: [C, H, W] -> [H, W, C]
+    arr = t.cpu().detach().numpy()
+    arr = np.transpose(arr, (1, 2, 0))  # [H, W, 3]
+    arr = (arr * 255).astype(np.uint8)
+    
+    # Ensure it's contiguous and RGB
+    arr = np.ascontiguousarray(arr)
+    
+    # Create RGB image
+    img = Image.fromarray(arr, mode='RGB')
+    
     buf = io.BytesIO()
     img.save(buf, format='PNG')
     buf.seek(0)
