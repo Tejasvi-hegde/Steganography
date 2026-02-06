@@ -83,7 +83,11 @@ dmypy.json
 
 # Project-specific
 data/
-outputs/
+outputs/tensorboard/
+outputs/*.png
+
+# Keep model checkpoints (important!)
+!outputs/checkpoints/
 
 # System files
 .DS_Store
