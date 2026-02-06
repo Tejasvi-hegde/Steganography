@@ -9,6 +9,7 @@ export interface Metrics {
   psnrStego: number;
   ssimStego: number;
   psnrRecovery: number;
+  ssimRecovery?: number;
   mse: number;
   processingTime: number;
 }
@@ -17,11 +18,22 @@ export interface ProcessingResult {
   stegoImage: string;
   recoveredSecret: string;
   metrics: Metrics;
+  histogramComparison?: string;
 }
 
 export interface ExtractResult {
   recoveredSecret: string;
   processingTime: number;
+}
+
+export interface RobustnessResult {
+  quality: number;
+  recoveredImage: string;
+  ssim: number;
+}
+
+export interface RobustnessTestResponse {
+  results: RobustnessResult[];
 }
 
 export interface AppState {

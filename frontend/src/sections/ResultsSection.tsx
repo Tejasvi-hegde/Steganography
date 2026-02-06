@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download, CheckCircle, Info } from 'lucide-react';
+import { Download, CheckCircle, Info, FileText, TestTube2, BarChart3 } from 'lucide-react';
 import { MetricCard, ResultImage, Button } from '../components';
-import { ProcessingResult, ExtractResult, ImageData } from '../types';
+import { ProcessingResult, ExtractResult, ImageData, RobustnessResult } from '../types';
+import { steganographyApi } from '../services';
 
 interface ResultsSectionProps {
   activeTab: 'hide' | 'extract';
@@ -32,6 +34,11 @@ export const ResultsSection = ({
   coverImage,
   secretImage,
 }: ResultsSectionProps) => {
+  const [robustnessResults, setRobustnessResults] = useState<RobustnessResult[] | null>(null);
+  const [isTestingRobustness, setIsTestingRobustness] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [showHistogram, setShowHistogram] = useState(false);
+
   const hasHideResults = activeTab === 'hide' && results !== null;
   const hasExtractResults = activeTab === 'extract' && extractResults !== null;
 
@@ -44,6 +51,37 @@ export const ResultsSection = ({
       ? 'GOOD'
       : 'FAIR'
     : null;
+
+  const handleRobustnessTest = async () => {
+    if (!results) return;
+    setIsTestingRobustness(true);
+    try {
+      const response = await steganographyApi.robustnessTest(results.stegoImage);
+      setRobustnessResults(response.results);
+    } catch (error) {
+      console.error('Robustness test failed:', error);
+    } finally {
+      setIsTestingRobustness(false);
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    if (!results) return;
+    setIsGeneratingReport(true);
+    try {
+      const blob = await steganographyApi.generateReport(results.metrics);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'steganography_report.pdf';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Report generation failed:', error);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
 
   return (
     <section className="py-16 px-4 bg-navy-800/30">
@@ -150,6 +188,84 @@ export const ResultsSection = ({
                 </div>
               </div>
 
+              {/* Histogram Comparison */}
+              {results!.histogramComparison && (
+                <div className="card mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-heading font-semibold flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-teal" />
+                      Histogram Analysis
+                    </h3>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setShowHistogram(!showHistogram)}
+                    >
+                      {showHistogram ? 'Hide' : 'Show'} Histogram
+                    </Button>
+                  </div>
+                  {showHistogram && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                    >
+                      <img 
+                        src={results!.histogramComparison} 
+                        alt="Histogram Comparison"
+                        className="w-full rounded-lg"
+                      />
+                      <p className="text-sm text-slate-blue mt-2 text-center">
+                        RGB channel histogram comparison between cover and stego images.
+                        Similar distributions indicate good steganographic quality.
+                      </p>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+
+              {/* Robustness Test Section */}
+              <div className="card mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-heading font-semibold flex items-center gap-2">
+                    <TestTube2 className="w-5 h-5 text-teal" />
+                    Robustness Test (JPEG Compression)
+                  </h3>
+                  <Button
+                    onClick={handleRobustnessTest}
+                    loading={isTestingRobustness}
+                    disabled={isTestingRobustness}
+                  >
+                    {isTestingRobustness ? 'Testing...' : 'Run Test'}
+                  </Button>
+                </div>
+                
+                {robustnessResults && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {robustnessResults.map((result) => (
+                        <div key={result.quality} className="text-center">
+                          <img 
+                            src={result.recoveredImage}
+                            alt={`Quality ${result.quality}`}
+                            className="w-full aspect-square object-cover rounded-lg mb-2"
+                          />
+                          <p className="font-semibold">JPEG Q{result.quality}</p>
+                          <p className={`text-sm ${result.ssim >= 0.8 ? 'text-teal' : result.ssim >= 0.6 ? 'text-amber' : 'text-red-400'}`}>
+                            SSIM: {result.ssim.toFixed(4)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-slate-blue mt-4 text-center">
+                      Shows how well the secret can be recovered after JPEG compression at different quality levels.
+                    </p>
+                  </motion.div>
+                )}
+              </div>
+
               {/* Download Buttons */}
               <div className="flex flex-wrap justify-center gap-4">
                 <Button
@@ -174,6 +290,15 @@ export const ResultsSection = ({
                 >
                   <Download className="w-5 h-5" />
                   Download Recovered
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handleGenerateReport}
+                  loading={isGeneratingReport}
+                  disabled={isGeneratingReport}
+                >
+                  <FileText className="w-5 h-5" />
+                  {isGeneratingReport ? 'Generating...' : 'Download PDF Report'}
                 </Button>
               </div>
 
